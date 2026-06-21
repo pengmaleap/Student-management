@@ -1,6 +1,6 @@
 {
-    "name": "student_management",
-    "short_name": "student_management",
+    "name": "Saby Track",
+    "short_name": "Saby Track",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

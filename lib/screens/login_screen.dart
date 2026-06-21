@@ -107,7 +107,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 14),
                       const Text(
-                        'Sabay Track',
+                        'Saby Track',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 28,

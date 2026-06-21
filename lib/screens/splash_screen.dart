@@ -90,7 +90,7 @@ class _SplashScreenState extends State<SplashScreen>
                       Opacity(
                         opacity: _fadeAnimation.value,
                         child: const Text(
-                          'Sabay Track',
+                          'Saby Track',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 32,
