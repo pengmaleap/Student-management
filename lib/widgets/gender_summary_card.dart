@@ -9,6 +9,7 @@ class GenderSummaryCard extends StatelessWidget {
     required this.female,
     required this.male,
     this.showTitleIcon = false,
+    this.onTap,
   });
 
   static const femaleColor = Color(0xFF0D83FF);
@@ -18,108 +19,113 @@ class GenderSummaryCard extends StatelessWidget {
   final int female;
   final int male;
   final bool showTitleIcon;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(22),
-      boxShadow: const [
-        BoxShadow(
-          color: Color(0x0A000000),
-          blurRadius: 20,
-          offset: Offset(0, 8),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            if (showTitleIcon) ...[
-              const Icon(Icons.person, color: Color(0xFF159DA8), size: 28),
-              const SizedBox(width: 10),
+  Widget build(BuildContext context) => GestureDetector(
+    behavior: HitTestBehavior.opaque,
+    onTap: onTap,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (showTitleIcon) ...[
+                const Icon(Icons.person, color: Color(0xFF159DA8), size: 28),
+                const SizedBox(width: 10),
+              ],
+              const Text(
+                'Student Gender',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+              ),
             ],
-            const Text(
-              'Student Gender',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Total Students:',
-                style: TextStyle(fontSize: 16, color: Color(0xFF738095)),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Total Students:',
+                  style: TextStyle(fontSize: 16, color: Color(0xFF738095)),
+                ),
               ),
-            ),
-            Text(
-              '$total',
-              style: const TextStyle(
-                fontSize: 28,
-                height: 1,
-                fontWeight: FontWeight.w800,
-                color: Color(0xFF111827),
+              Text(
+                '$total',
+                style: const TextStyle(
+                  fontSize: 28,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF111827),
+                ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 22),
-        Row(
-          children: [
-            SizedBox(
-              width: 132,
-              height: 132,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  CustomPaint(
-                    size: const Size.square(126),
-                    painter: _GenderRingPainter(female: female, male: male),
-                  ),
-                  Container(
-                    width: 78,
-                    height: 78,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF9FAFB),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
+            ],
+          ),
+          const SizedBox(height: 22),
+          Row(
+            children: [
+              SizedBox(
+                width: 132,
+                height: 132,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    CustomPaint(
+                      size: const Size.square(126),
+                      painter: _GenderRingPainter(female: female, male: male),
                     ),
-                    child: Text(
-                      '$total',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF111827),
+                    Container(
+                      width: 78,
+                      height: 78,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF9FAFB),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                      ),
+                      child: Text(
+                        '$total',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF111827),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 24),
-            Expanded(
-              child: Column(
-                children: [
-                  _GenderLegend(
-                    color: femaleColor,
-                    label: 'Female',
-                    value: female,
-                  ),
-                  const SizedBox(height: 22),
-                  _GenderLegend(color: maleColor, label: 'Male', value: male),
-                ],
+              const SizedBox(width: 24),
+              Expanded(
+                child: Column(
+                  children: [
+                    _GenderLegend(
+                      color: femaleColor,
+                      label: 'Female',
+                      value: female,
+                    ),
+                    const SizedBox(height: 22),
+                    _GenderLegend(color: maleColor, label: 'Male', value: male),
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     ),
   );
 }

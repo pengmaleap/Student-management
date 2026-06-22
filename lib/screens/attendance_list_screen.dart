@@ -16,8 +16,13 @@ const _attendanceStatuses = [
 ];
 
 class AttendanceListScreen extends StatefulWidget {
-  const AttendanceListScreen({super.key, required this.initialDate});
+  const AttendanceListScreen({
+    super.key,
+    required this.initialDate,
+    this.classId,
+  });
   final DateTime initialDate;
+  final int? classId;
 
   @override
   State<AttendanceListScreen> createState() => _AttendanceListScreenState();
@@ -29,6 +34,7 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
   late DateTime _date;
   Future<List<dynamic>>? _attendance;
   final Set<int> _savingAttendance = {};
+  bool _hasChanges = false;
 
   @override
   void initState() {
@@ -44,7 +50,11 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
   }
 
   Future<void> _load() {
-    final request = _api.getAttendance(_date, search: _searchController.text);
+    final request = _api.getAttendance(
+      _date,
+      search: _searchController.text,
+      classId: widget.classId,
+    );
     setState(() {
       _attendance = request;
     });
@@ -149,6 +159,7 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
         checkOut: clearsTimes ? null : record['check_out']?.toString(),
         note: record['note']?.toString(),
       );
+      _hasChanges = true;
       await _load();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -175,148 +186,159 @@ class _AttendanceListScreenState extends State<AttendanceListScreen> {
     }
   }
 
+  void _close() => Navigator.pop(context, _hasChanges);
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFFCFCFC),
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.white,
-        elevation: 0,
-        toolbarHeight: 82,
-        centerTitle: true,
-        leading: IconButton(
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.chevron_left, size: 34),
-        ),
-        title: const Text(
-          'Attendance List',
-          style: TextStyle(
-            color: Color(0xFF505050),
-            fontSize: 21,
-            fontWeight: FontWeight.w700,
+    return PopScope<bool>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _close();
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFFCFCFC),
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.white,
+          elevation: 0,
+          toolbarHeight: 82,
+          centerTitle: true,
+          leading: IconButton(
+            onPressed: _close,
+            icon: const Icon(Icons.chevron_left, size: 34),
+          ),
+          title: const Text(
+            'Attendance List',
+            style: TextStyle(
+              color: Color(0xFF505050),
+              fontSize: 21,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
-      ),
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 27, 20, 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Attendance List',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 3),
-                  const Text(
-                    'Track all the attendance performance.',
-                    style: TextStyle(fontSize: 16, color: Color(0xFF777777)),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: SizedBox(
-                          height: 58,
-                          child: TextField(
-                            controller: _searchController,
-                            onSubmitted: (_) => _load(),
-                            textInputAction: TextInputAction.search,
-                            decoration: InputDecoration(
-                              prefixIcon: const Icon(
-                                Icons.search,
-                                size: 31,
-                                color: _attendanceTeal,
-                              ),
-                              hintText: 'Search...',
-                              hintStyle: const TextStyle(
-                                color: Color(0xFF888888),
-                                fontSize: 18,
-                              ),
-                              filled: true,
-                              fillColor: Colors.white,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 16,
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFE1E1E1),
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 27, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Attendance List',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Track all the attendance performance.',
+                      style: TextStyle(fontSize: 16, color: Color(0xFF777777)),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 58,
+                            child: TextField(
+                              controller: _searchController,
+                              onSubmitted: (_) => _load(),
+                              textInputAction: TextInputAction.search,
+                              decoration: InputDecoration(
+                                prefixIcon: const Icon(
+                                  Icons.search,
+                                  size: 31,
                                   color: _attendanceTeal,
-                                  width: 1.5,
+                                ),
+                                hintText: 'Search...',
+                                hintStyle: const TextStyle(
+                                  color: Color(0xFF888888),
+                                  fontSize: 18,
+                                ),
+                                filled: true,
+                                fillColor: Colors.white,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: Color(0xFFE1E1E1),
+                                  ),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(
+                                    color: _attendanceTeal,
+                                    width: 1.5,
+                                  ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      _ActionButton(
-                        icon: Icons.filter_alt_outlined,
-                        onTap: _pickDate,
-                      ),
-                      const SizedBox(width: 10),
-                      _ActionButton(
-                        icon: Icons.file_download_outlined,
-                        onTap: _download,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: FutureBuilder<List<dynamic>>(
-                future: _attendance,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return _ErrorView(
-                      message: snapshot.error.toString(),
-                      retry: _load,
-                    );
-                  }
-                  final records = snapshot.data ?? [];
-                  if (records.isEmpty) {
-                    return Center(
-                      child: Text(
-                        'No attendance on ${DateFormat('MMM d, yyyy').format(_date)}',
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                    );
-                  }
-                  return RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-                      itemCount: records.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 15),
-                      itemBuilder: (_, index) => _AttendanceCard(
-                        record: records[index] as Map<String, dynamic>,
-                        saving: _savingAttendance.contains(
-                          (records[index] as Map<String, dynamic>)['id'],
+                        const SizedBox(width: 10),
+                        _ActionButton(
+                          icon: Icons.filter_alt_outlined,
+                          onTap: _pickDate,
                         ),
-                        onStatusTap: () => _changeStatus(
-                          records[index] as Map<String, dynamic>,
+                        const SizedBox(width: 10),
+                        _ActionButton(
+                          icon: Icons.file_download_outlined,
+                          onTap: _download,
                         ),
-                      ),
+                      ],
                     ),
-                  );
-                },
+                  ],
+                ),
               ),
-            ),
-          ],
+              Expanded(
+                child: FutureBuilder<List<dynamic>>(
+                  future: _attendance,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return _ErrorView(
+                        message: snapshot.error.toString(),
+                        retry: _load,
+                      );
+                    }
+                    final records = snapshot.data ?? [];
+                    if (records.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No attendance on ${DateFormat('MMM d, yyyy').format(_date)}',
+                          style: const TextStyle(color: Colors.black54),
+                        ),
+                      );
+                    }
+                    return RefreshIndicator(
+                      onRefresh: _load,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+                        itemCount: records.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 15),
+                        itemBuilder: (_, index) => _AttendanceCard(
+                          record: records[index] as Map<String, dynamic>,
+                          saving: _savingAttendance.contains(
+                            (records[index] as Map<String, dynamic>)['id'],
+                          ),
+                          onStatusTap: () => _changeStatus(
+                            records[index] as Map<String, dynamic>,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -361,8 +383,6 @@ class _AttendanceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = record['status'].toString();
     final color = _attendanceStatusColor(status);
-    final date = DateTime.parse(record['attendance_date'].toString()).toLocal();
-    final dateLabel = DateFormat('MMM d').format(date);
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -466,65 +486,20 @@ class _AttendanceCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 15),
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.calendar_month,
-                          size: 19,
-                          color: _attendanceTeal,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '$dateLabel - ${_time(record['check_in'])}',
-                              style: const TextStyle(
-                                color: _attendanceTeal,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 24,
-                          margin: const EdgeInsets.symmetric(horizontal: 10),
-                          color: _attendanceTeal,
-                        ),
-                        Expanded(
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              '$dateLabel - ${_time(record['check_out'])}',
-                              style: const TextStyle(
-                                color: _attendanceTeal,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                     const SizedBox(height: 13),
                     Row(
                       children: [
                         const Icon(
-                          Icons.location_on,
+                          Icons.school_outlined,
                           size: 20,
                           color: _attendanceTeal,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            record['address']?.toString().isNotEmpty == true
-                                ? record['address'].toString()
-                                : 'School Campus',
+                            record['class_name']?.toString().isNotEmpty == true
+                                ? record['class_name'].toString()
+                                : 'No class assigned',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
@@ -543,14 +518,6 @@ class _AttendanceCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _time(dynamic value) {
-    if (value == null) return '--';
-    final parts = value.toString().split(':');
-    return DateFormat(
-      'h:mm a',
-    ).format(DateTime(2000, 1, 1, int.parse(parts[0]), int.parse(parts[1])));
   }
 }
 

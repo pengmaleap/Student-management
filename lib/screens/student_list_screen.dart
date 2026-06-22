@@ -4,7 +4,9 @@ import '../services/api_service.dart';
 import '../widgets/gender_summary_card.dart';
 
 class StudentListScreen extends StatefulWidget {
-  const StudentListScreen({super.key});
+  const StudentListScreen({super.key, this.initialClassId});
+
+  final int? initialClassId;
 
   @override
   State<StudentListScreen> createState() => _StudentListScreenState();
@@ -14,11 +16,24 @@ class _StudentListScreenState extends State<StudentListScreen> {
   final ApiService _api = ApiService();
   final TextEditingController _search = TextEditingController();
   Future<List<dynamic>>? _students;
+  List<dynamic> _classes = [];
+  int? _selectedClassId;
 
   @override
   void initState() {
     super.initState();
+    _selectedClassId = widget.initialClassId;
     _load();
+    _loadClasses();
+  }
+
+  @override
+  void didUpdateWidget(covariant StudentListScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialClassId != widget.initialClassId) {
+      _selectedClassId = widget.initialClassId;
+      _load();
+    }
   }
 
   @override
@@ -28,11 +43,72 @@ class _StudentListScreenState extends State<StudentListScreen> {
   }
 
   Future<void> _load() {
-    final request = _api.getStudents(search: _search.text);
+    final request = _api.getStudents(
+      search: _search.text,
+      classId: _selectedClassId,
+    );
     setState(() {
       _students = request;
     });
     return request.then<void>((_) {}, onError: (_) {});
+  }
+
+  Future<void> _loadClasses() async {
+    try {
+      final classes = await _api.getClasses();
+      if (mounted) setState(() => _classes = classes);
+    } catch (_) {
+      // Student data can still load without class metadata.
+    }
+  }
+
+  Future<void> _pickClass() async {
+    if (_classes.isEmpty) await _loadClasses();
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<int?>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'Filter students by class',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+              ),
+            ),
+            ListTile(
+              title: const Text('All Classes'),
+              trailing: _selectedClassId == null
+                  ? const Icon(Icons.check, color: Color(0xFF087D38))
+                  : null,
+              onTap: () => Navigator.pop(context, -1),
+            ),
+            for (final item in _classes)
+              ListTile(
+                title: Text(item['name'].toString()),
+                subtitle: Text('${item['student_count']} students'),
+                trailing: _selectedClassId == item['id']
+                    ? const Icon(Icons.check, color: Color(0xFF087D38))
+                    : null,
+                onTap: () => Navigator.pop(context, item['id'] as int),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+    setState(() => _selectedClassId = selected == -1 ? null : selected);
+    _load();
+  }
+
+  String get _selectedClassName {
+    if (_selectedClassId == null) return 'All Classes';
+    for (final item in _classes) {
+      if (item['id'] == _selectedClassId) return item['name'].toString();
+    }
+    return 'Selected Class';
   }
 
   void _export() {
@@ -49,6 +125,7 @@ class _StudentListScreenState extends State<StudentListScreen> {
     if (created == true) {
       _search.clear();
       _load();
+      _loadClasses();
     }
   }
 
@@ -142,6 +219,25 @@ class _StudentListScreenState extends State<StudentListScreen> {
                     ),
                   ),
                 ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    child: OutlinedButton.icon(
+                      onPressed: _pickClass,
+                      icon: const Icon(Icons.apartment),
+                      label: Text(
+                        _selectedClassName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      iconAlignment: IconAlignment.start,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                        alignment: Alignment.centerLeft,
+                      ),
+                    ),
+                  ),
+                ),
                 if (snapshot.connectionState == ConnectionState.waiting)
                   const SliverFillRemaining(
                     hasScrollBody: false,
@@ -221,10 +317,37 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
   final TextEditingController _studentCode = TextEditingController();
   final TextEditingController _email = TextEditingController();
   final TextEditingController _phone = TextEditingController();
-  final TextEditingController _grade = TextEditingController();
   final TextEditingController _address = TextEditingController();
   String _gender = 'female';
+  List<dynamic> _classes = [];
+  int? _classId;
+  bool _loadingClasses = true;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadClasses();
+  }
+
+  Future<void> _loadClasses() async {
+    try {
+      final classes = await _api.getClasses();
+      if (mounted) {
+        setState(() {
+          _classes = classes;
+          _loadingClasses = false;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _loadingClasses = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+  }
 
   @override
   void dispose() {
@@ -232,7 +355,6 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
     _studentCode.dispose();
     _email.dispose();
     _phone.dispose();
-    _grade.dispose();
     _address.dispose();
     super.dispose();
   }
@@ -246,7 +368,7 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
         'studentCode': _studentCode.text.trim(),
         'email': _email.text.trim(),
         'phone': _phone.text.trim(),
-        'grade': _grade.text.trim(),
+        'classId': _classId,
         'address': _address.text.trim(),
         'gender': _gender,
       });
@@ -319,12 +441,25 @@ class _AddStudentScreenState extends State<AddStudentScreen> {
               onChanged: (value) => setState(() => _gender = value!),
             ),
             const SizedBox(height: 15),
-            _field(
-              controller: _grade,
-              label: 'Grade or class *',
-              icon: Icons.school_outlined,
-              validator: _required,
-              textCapitalization: TextCapitalization.words,
+            DropdownButtonFormField<int>(
+              initialValue: _classId,
+              decoration: _decoration('Class *', Icons.school_outlined),
+              hint: Text(
+                _loadingClasses ? 'Loading classes...' : 'Select a class',
+              ),
+              items: _classes
+                  .map(
+                    (item) => DropdownMenuItem<int>(
+                      value: item['id'] as int,
+                      child: Text(item['name'].toString()),
+                    ),
+                  )
+                  .toList(),
+              validator: (value) =>
+                  value == null ? 'Please select a class' : null,
+              onChanged: _loadingClasses
+                  ? null
+                  : (value) => setState(() => _classId = value),
             ),
             const SizedBox(height: 15),
             _field(
@@ -576,7 +711,7 @@ class _StudentRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${student['student_code'] ?? 'No ID'} | ${student['grade']}',
+                    '${student['student_code'] ?? 'No ID'} | ${student['class_name'] ?? student['grade']}',
                     style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF8C8C8C),

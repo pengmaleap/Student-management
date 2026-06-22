@@ -1,19 +1,18 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:student_management/main.dart';
 
 void main() {
-  testWidgets('dashboard mounts without a setState callback error', (
-    tester,
-  ) async {
+  testWidgets('unauthenticated app opens the teacher login', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
     await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
 
-    expect(find.text('Peng Maleap'), findsOneWidget);
-    expect(find.text('Home'), findsOneWidget);
-    expect(find.text('Notepad'), findsOneWidget);
-    expect(find.text('Student List'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-
-    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Saby Track'), findsOneWidget);
+    expect(find.text('Username'), findsOneWidget);
+    expect(find.text('Password'), findsOneWidget);
+    expect(find.text('Log In'), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 }

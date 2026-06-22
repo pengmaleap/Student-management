@@ -15,7 +15,8 @@ class _NotesScreenState extends State<NotesScreen> {
   final TextEditingController _search = TextEditingController();
   late final List<DateTime> _dates;
   late DateTime _selectedDate;
-  String _category = 'All';
+  List<dynamic> _noteTypes = [];
+  int? _noteTypeId;
   Future<List<dynamic>>? _notes;
 
   @override
@@ -28,6 +29,7 @@ class _NotesScreenState extends State<NotesScreen> {
       (index) => _selectedDate.add(Duration(days: index - 3)),
     );
     _load();
+    _loadNoteTypes();
   }
 
   @override
@@ -44,6 +46,15 @@ class _NotesScreenState extends State<NotesScreen> {
     return request.then<void>((_) {}, onError: (_) {});
   }
 
+  Future<void> _loadNoteTypes() async {
+    try {
+      final noteTypes = await _api.getNoteTypes();
+      if (mounted) setState(() => _noteTypes = noteTypes);
+    } catch (_) {
+      // Notes can still display if type metadata cannot be loaded.
+    }
+  }
+
   Future<void> _edit([Map<String, dynamic>? note]) async {
     final changed = await Navigator.push<bool>(
       context,
@@ -58,8 +69,8 @@ class _NotesScreenState extends State<NotesScreen> {
     builder: (context, snapshot) {
       final allNotes = snapshot.data ?? [];
       final notes = allNotes.where((item) {
-        if (_category == 'All') return true;
-        return item['category']?.toString() == _category;
+        if (_noteTypeId == null) return true;
+        return item['note_type_id'] == _noteTypeId;
       }).toList();
 
       return Stack(
@@ -131,13 +142,9 @@ class _NotesScreenState extends State<NotesScreen> {
 
   Widget _buildHeader() {
     final topPadding = MediaQuery.paddingOf(context).top;
-    const categories = [
-      'All',
-      'Important',
-      'Lecture notes',
-      'To-do',
-      'Homework',
-      'General',
+    final noteTypes = [
+      <String, dynamic>{'id': null, 'name': 'All'},
+      ..._noteTypes.map((item) => Map<String, dynamic>.from(item as Map)),
     ];
     return Container(
       padding: EdgeInsets.fromLTRB(20, topPadding + 24, 20, 22),
@@ -276,13 +283,14 @@ class _NotesScreenState extends State<NotesScreen> {
             height: 47,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: categories.length,
+              itemCount: noteTypes.length,
               separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (_, index) {
-                final category = categories[index];
-                final selected = category == _category;
+                final noteType = noteTypes[index];
+                final id = noteType['id'] as int?;
+                final selected = id == _noteTypeId;
                 return ChoiceChip(
-                  label: Text(category),
+                  label: Text(noteType['name'].toString()),
                   selected: selected,
                   showCheckmark: false,
                   backgroundColor: Colors.white,
@@ -294,7 +302,7 @@ class _NotesScreenState extends State<NotesScreen> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  onSelected: (_) => setState(() => _category = category),
+                  onSelected: (_) => setState(() => _noteTypeId = id),
                 );
               },
             ),
@@ -467,7 +475,7 @@ class _NoteCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  note['category'].toString(),
+                  (note['note_type'] ?? note['category']).toString(),
                   style: const TextStyle(fontSize: 10),
                 ),
               ],
@@ -496,7 +504,9 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   final ApiService _api = ApiService();
   late final TextEditingController _title;
   late final TextEditingController _content;
-  late String _category;
+  List<dynamic> _noteTypes = [];
+  int? _noteTypeId;
+  bool _loadingNoteTypes = true;
   late String _color;
   late DateTime _date;
   bool _saving = false;
@@ -512,11 +522,42 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     final note = widget.note;
     _title = TextEditingController(text: note?['title']?.toString() ?? '');
     _content = TextEditingController(text: note?['content']?.toString() ?? '');
-    _category = note?['category']?.toString() ?? 'General';
+    _noteTypeId = note?['note_type_id'] as int?;
     _color = note?['color']?.toString() ?? colors.first;
     _date = note == null
         ? DateTime.now()
         : DateTime.parse(note['note_date'].toString());
+    _loadNoteTypes();
+  }
+
+  Future<void> _loadNoteTypes() async {
+    try {
+      final noteTypes = await _api.getNoteTypes();
+      if (!mounted) return;
+      setState(() {
+        _noteTypes = noteTypes;
+        _loadingNoteTypes = false;
+        _noteTypeId ??= _matchingNoteTypeId(
+          widget.note?['category']?.toString() ?? 'General',
+        );
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() => _loadingNoteTypes = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    }
+  }
+
+  int? _matchingNoteTypeId(String name) {
+    for (final item in _noteTypes) {
+      if (item['name'].toString().toLowerCase() == name.toLowerCase()) {
+        return item['id'] as int;
+      }
+    }
+    return null;
   }
 
   @override
@@ -533,13 +574,19 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
       );
       return;
     }
+    if (_noteTypeId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a note type')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       await _api.saveNote({
         'id': widget.note?['id'],
         'title': _title.text,
         'content': _content.text,
-        'category': _category,
+        'noteTypeId': _noteTypeId,
         'color': _color,
         'noteDate': DateFormat('yyyy-MM-dd').format(_date),
       });
@@ -592,45 +639,14 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 23),
-          TextField(
-            controller: _title,
-            style: const TextStyle(fontSize: 17),
-            decoration: InputDecoration(
-              hintText: 'Note Type',
-              suffixIcon: const Icon(
-                Icons.keyboard_arrow_down,
-                color: Color(0xFFAAAAAA),
-              ),
-              suffix: const Text(
-                '*',
-                style: TextStyle(color: Colors.red, fontSize: 18),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 18,
-                vertical: 22,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Color(0xFFDADADA)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                  color: Color(0xFF109447),
-                  width: 1.5,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 18),
-          DropdownButtonFormField<String>(
-            initialValue: _category,
+          DropdownButtonFormField<int>(
+            initialValue: _noteTypeId,
             icon: const Icon(
               Icons.keyboard_arrow_down,
               color: Color(0xFFAAAAAA),
             ),
             decoration: InputDecoration(
-              labelText: 'Department',
+              labelText: 'Note Type *',
               labelStyle: const TextStyle(
                 fontSize: 17,
                 color: Color(0xFF555555),
@@ -651,20 +667,49 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 ),
               ),
             ),
-            items:
-                const [
-                      'General',
-                      'Important',
-                      'Lecture notes',
-                      'To-do',
-                      'Homework',
-                    ]
-                    .map(
-                      (value) =>
-                          DropdownMenuItem(value: value, child: Text(value)),
-                    )
-                    .toList(),
-            onChanged: (value) => setState(() => _category = value!),
+            hint: Text(
+              _loadingNoteTypes ? 'Loading note types...' : 'Select note type',
+            ),
+            items: _noteTypes
+                .map(
+                  (item) => DropdownMenuItem<int>(
+                    value: item['id'] as int,
+                    child: Text(item['name'].toString()),
+                  ),
+                )
+                .toList(),
+            onChanged: _loadingNoteTypes
+                ? null
+                : (value) => setState(() {
+                    _noteTypeId = value;
+                    final selected = _noteTypes.firstWhere(
+                      (item) => item['id'] == value,
+                    );
+                    _color = selected['default_color']?.toString() ?? _color;
+                  }),
+          ),
+          const SizedBox(height: 18),
+          TextField(
+            controller: _title,
+            style: const TextStyle(fontSize: 17),
+            decoration: InputDecoration(
+              labelText: 'Note Title *',
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 18,
+                vertical: 22,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Color(0xFFDADADA)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: Color(0xFF109447),
+                  width: 1.5,
+                ),
+              ),
+            ),
           ),
           const SizedBox(height: 28),
           _formattingToolbar(),

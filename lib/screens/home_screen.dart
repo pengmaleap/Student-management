@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../services/api_service.dart';
 import '../widgets/gender_summary_card.dart';
 import 'attendance_list_screen.dart';
+import 'login_screen.dart';
 import 'notes_screen.dart';
 import 'student_list_screen.dart';
 
@@ -21,13 +22,19 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
+  int? _studentClassId;
 
   @override
   Widget build(BuildContext context) {
     final pages = [
-      const DashboardScreen(),
+      DashboardScreen(
+        onOpenStudents: (classId) => setState(() {
+          _studentClassId = classId;
+          _index = 2;
+        }),
+      ),
       const NotesScreen(),
-      const StudentListScreen(),
+      StudentListScreen(initialClassId: _studentClassId),
       TeacherProfileScreen(onBack: () => setState(() => _index = 0)),
     ];
 
@@ -181,7 +188,9 @@ class _LiquidGlassNavigationBar extends StatelessWidget {
 }
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  const DashboardScreen({super.key, required this.onOpenStudents});
+
+  final ValueChanged<int?> onOpenStudents;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -193,6 +202,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late DateTime _selectedDate;
   late List<DateTime> _calendarDates;
   Future<Map<String, dynamic>>? _dashboard;
+  List<dynamic> _classes = [];
+  int? _selectedClassId;
+  String _selectedClassName = 'All Classes';
 
   @override
   void initState() {
@@ -204,6 +216,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       (index) => _selectedDate.add(Duration(days: index - 14)),
     );
     _load();
+    _loadClasses();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_calendarController.hasClients) _calendarController.jumpTo(14 * 70.0);
     });
@@ -216,11 +229,77 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _load() {
-    final request = _api.getDashboard(_selectedDate);
+    final today = DateTime.now();
+    final request = _sameDay(_selectedDate, today)
+        ? _api
+              .initializeDailyData(_selectedDate)
+              .then(
+                (_) =>
+                    _api.getDashboard(_selectedDate, classId: _selectedClassId),
+              )
+        : _api.getDashboard(_selectedDate, classId: _selectedClassId);
     setState(() {
       _dashboard = request;
     });
     return request.then<void>((_) {}, onError: (_) {});
+  }
+
+  Future<void> _loadClasses() async {
+    try {
+      final classes = await _api.getClasses();
+      if (mounted) setState(() => _classes = classes);
+    } catch (_) {
+      // The unfiltered dashboard can still load if class metadata fails.
+    }
+  }
+
+  Future<void> _pickClass() async {
+    if (_classes.isEmpty) await _loadClasses();
+    if (!mounted) return;
+    final selected = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'Filter by class',
+                style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
+              ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.groups_outlined),
+              title: const Text('All Classes'),
+              trailing: _selectedClassId == null
+                  ? const Icon(Icons.check, color: appGreen)
+                  : null,
+              onTap: () => Navigator.pop(context, <String, dynamic>{}),
+            ),
+            for (final item in _classes)
+              ListTile(
+                leading: const Icon(Icons.apartment),
+                title: Text(item['name'].toString()),
+                subtitle: Text('${item['student_count']} students'),
+                trailing: _selectedClassId == item['id']
+                    ? const Icon(Icons.check, color: appGreen)
+                    : null,
+                onTap: () => Navigator.pop(
+                  context,
+                  Map<String, dynamic>.from(item as Map),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return;
+    setState(() {
+      _selectedClassId = selected['id'] as int?;
+      _selectedClassName = selected['name']?.toString() ?? 'All Classes';
+    });
+    _load();
   }
 
   Future<void> _pickDate() async {
@@ -499,10 +578,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: _DashboardFilterButton(
                   icon: Icons.apartment,
-                  label: 'ComYIES1',
+                  label: _selectedClassName,
+                  onTap: _pickClass,
                 ),
               ),
             ],
@@ -526,6 +606,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             total: gender['total'] as int? ?? 0,
             female: gender['female'] as int? ?? 0,
             male: gender['male'] as int? ?? 0,
+            onTap: () => widget.onOpenStudents(_selectedClassId),
           ),
           const SizedBox(height: 14),
           _overviewCard(overview),
@@ -603,13 +684,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               TextButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        AttendanceListScreen(initialDate: _selectedDate),
-                  ),
-                ),
+                onPressed: _openAttendanceList,
                 child: const Text('View All'),
               ),
             ],
@@ -624,6 +699,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openAttendanceList() async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AttendanceListScreen(
+          initialDate: _selectedDate,
+          classId: _selectedClassId,
+        ),
+      ),
+    );
+    if (changed == true && mounted) await _load();
   }
 
   Widget _scheduleCard(List<dynamic> schedules) {
@@ -1065,6 +1153,24 @@ class TeacherProfileScreen extends StatelessWidget {
                       onTap: () {},
                     ),
                   ),
+                ListTile(
+                  minLeadingWidth: 42,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                  leading: const Icon(
+                    Icons.logout,
+                    color: Color(0xFFE53935),
+                    size: 29,
+                  ),
+                  title: const Text(
+                    'Log out',
+                    style: TextStyle(
+                      color: Color(0xFFE53935),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  onTap: () => _logout(context),
+                ),
               ],
             ),
           ),
@@ -1072,6 +1178,15 @@ class TeacherProfileScreen extends StatelessWidget {
       ),
     ),
   );
+
+  Future<void> _logout(BuildContext context) async {
+    await ApiService().logout();
+    if (!context.mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (_) => false,
+    );
+  }
 }
 
 class _ProfileContact extends StatelessWidget {
@@ -1138,6 +1253,18 @@ class _StatusBadge extends StatelessWidget {
   final String status;
   @override
   Widget build(BuildContext context) {
+    if (status == 'missed') {
+      return Container(
+        width: 50,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.grey.withAlpha(30),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Text('-;-'),
+      );
+    }
     final color = _statusColor(status);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),

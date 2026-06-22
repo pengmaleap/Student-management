@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'signup_screen.dart';
+import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,7 +14,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final ApiService _api = ApiService();
   bool _passwordVisible = false;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -22,14 +25,28 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _submitLogin() {
-    if (_formKey.currentState?.validate() ?? false) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Logging in...')));
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+  Future<void> _submitLogin() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _loading = true);
+    try {
+      await _api.login(
+        _usernameController.text.trim(),
+        _passwordController.text,
+      );
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (_) => false,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -223,7 +240,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                                 const SizedBox(height: 16),
                                 ElevatedButton(
-                                  onPressed: _submitLogin,
+                                  onPressed: _loading ? null : _submitLogin,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.white,
                                     foregroundColor: const Color(0xFF1D7C3E),
@@ -232,13 +249,21 @@ class _LoginScreenState extends State<LoginScreen> {
                                       borderRadius: BorderRadius.circular(24),
                                     ),
                                   ),
-                                  child: const Text(
-                                    'Log In',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  child: _loading
+                                      ? const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Log In',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                 ),
                                 const SizedBox(height: 16),
                                 Row(

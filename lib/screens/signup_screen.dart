@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
+import '../services/api_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -13,8 +14,10 @@ class _SignupScreenState extends State<SignupScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmController = TextEditingController();
+  final ApiService _api = ApiService();
   bool _passwordVisible = false;
   bool _confirmVisible = false;
+  bool _loading = false;
 
   @override
   void dispose() {
@@ -24,16 +27,28 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  void _createAccount() {
-    if (_formKey.currentState?.validate() ?? false) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created successfully. Redirecting...'),
-        ),
+  Future<void> _createAccount() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() => _loading = true);
+    try {
+      await _api.register(
+        username: _usernameController.text.trim(),
+        password: _passwordController.text,
       );
-      Navigator.of(
-        context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+          (_) => false,
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -207,7 +222,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                 ),
                                 const SizedBox(height: 24),
                                 ElevatedButton(
-                                  onPressed: _createAccount,
+                                  onPressed: _loading ? null : _createAccount,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.white,
                                     foregroundColor: const Color(0xFF1D7C3E),
@@ -216,13 +231,21 @@ class _SignupScreenState extends State<SignupScreen> {
                                       borderRadius: BorderRadius.circular(24),
                                     ),
                                   ),
-                                  child: const Text(
-                                    'Create Account',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  child: _loading
+                                      ? const SizedBox(
+                                          width: 22,
+                                          height: 22,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text(
+                                          'Create Account',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
                                 ),
                                 const SizedBox(height: 18),
                                 Row(
